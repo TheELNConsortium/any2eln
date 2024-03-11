@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "any2eln"
+version = "0.1.0"
+description = "Tool to transfer data from ELN to .eln"
+authors = ["Nicolas CARPi <noreply@deltablot.com>"]
+readme = "README.md"
+packages = [{include = "any2eln"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.31.0"
+tqdm = "^4.66.1"
+pandas = "^2.1.4"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.8.0"
+black = "^23.12.1"
+isort = "^5.13.2"
+types-requests = "^2.31.0.20240106"
+types-tqdm = "^4.66.0.20240106"
+pandas-stubs = "^2.1.4.231227"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+skip-string-normalization = true
