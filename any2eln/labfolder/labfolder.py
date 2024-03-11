@@ -25,7 +25,7 @@ from any2eln.utils.rocrate import get_crate_metadata
 
 
 class Labfolder:
-    def __init__(self, username: str, password: str, out_dir = '.'):
+    def __init__(self, username: str, password: str, out_dir='.'):
         self.username = username
         self.password = password
         self.token = self.__get_token()
@@ -205,7 +205,9 @@ class Labfolder:
                                 # save the full json
                                 with entry_folder.joinpath(f"{json_metadata['id']}").open('w') as json_file:
                                     json.dump(json_metadata, json_file, indent=2)
-                                node['sha256'] = hashlib.sha256(json.dumps(json_metadata, indent=2).encode()).hexdigest()
+                                node['sha256'] = hashlib.sha256(
+                                    json.dumps(json_metadata, indent=2).encode()
+                                ).hexdigest()
                                 crate_metadata['@graph'].append(node)
                                 files.append(node['@id'])
 
@@ -230,7 +232,9 @@ class Labfolder:
                                 node = self.__get_node_from_metadata(json_metadata, entry_folder)
                                 with entry_folder.joinpath(f"{json_metadata['id']}").open('w') as json_file:
                                     json.dump(json_metadata, json_file, indent=2)
-                                node['sha256'] = hashlib.sha256(json.dumps(json_metadata, indent=2).encode()).hexdigest()
+                                node['sha256'] = hashlib.sha256(
+                                    json.dumps(json_metadata, indent=2).encode()
+                                ).hexdigest()
                                 crate_metadata['@graph'].append(node)
                                 files.append(node['@id'])
 
@@ -290,7 +294,8 @@ class Labfolder:
     def __get_links_script(self) -> str:
         lines = []
         for category in self.categories:
-            lines.append(f"""
+            lines.append(
+                f"""
 INSERT INTO experiments_links (item_id, link_id)
 SELECT
   experiments.id,
@@ -298,9 +303,9 @@ SELECT
 FROM experiments
 LEFT JOIN tags2entity ON tags2entity.item_id = experiments.id AND tags2entity.item_type = 'experiments'
 LEFT JOIN tags ON tags2entity.tag_id = tags.id
-WHERE tags.tag = "{category}";""")
+WHERE tags.tag = "{category}";"""
+            )
         return '\n'.join(lines)
-
 
     def __get_project_script(self) -> str:
         header = """#!/usr/bin/env python
@@ -348,7 +353,7 @@ itemsApi.patch_item(itemId, body={'title': """
             self.categories.append(project_title)
         node['keywords'] = ','.join(entry.get('tags', []))
         # use this to create a Category with the Project title
-        #node['category'] = entry.get('project', {}).get('title', {})
+        # node['category'] = entry.get('project', {}).get('title', {})
         node['dateCreated'] = entry['creation_date']
         node['dateModified'] = entry['version_date']
         node['hasPart'] = [{'@id': file} for file in files]
@@ -402,7 +407,7 @@ itemsApi.patch_item(itemId, body={'title': """
                 debug('Skipping csv that has no dataTable in data:')
                 debug(json.dumps(json_metadata, indent=2))
                 continue
-            #column_names = [str(table_data['0'][str(i)].get('value', '')) for i in range(len(table_data['0']))]
+            # column_names = [str(table_data['0'][str(i)].get('value', '')) for i in range(len(table_data['0']))]
             rows = []
             for key, values in table_data.items():
                 row = {}
@@ -413,7 +418,7 @@ itemsApi.patch_item(itemId, body={'title': """
             # Create DataFrame from the list of dictionaries
             df = pd.DataFrame(rows)
             # drop first row
-            #df = df.drop(0)
+            # df = df.drop(0)
             # None as first arg will return the csv as string instead of writing a file
             csvs.append((sheet_name + '.csv', df.to_csv(None, index=False)))
         return csvs

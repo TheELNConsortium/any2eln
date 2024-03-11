@@ -5,6 +5,7 @@
 from datetime import datetime
 from typing import Any
 
+
 def get_crate_metadata() -> dict[str, Any]:
     crate_metadata: dict[str, Any] = {}
     crate_metadata['@context'] = 'https://w3id.org/ro/crate/1.1/context'

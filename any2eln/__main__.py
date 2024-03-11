@@ -14,13 +14,14 @@ def main():
     parser.add_argument('--out_dir', required=False, help='output directory', default='.')
     args = parser.parse_args()
 
-    if (args.src == 'labfolder'):
+    if args.src == 'labfolder':
         username = env_or_ask('LABFOLDER_USERNAME', 'Your Labfolder username or email: ')
         password = env_or_ask('LABFOLDER_PASSWORD', 'Your Labfolder password: ')
         lf = Labfolder(username, password, out_dir=args.out_dir)
         lf.extract()
     else:
         print('Not implemented.')
+
 
 if __name__ == "__main__":
     main()
