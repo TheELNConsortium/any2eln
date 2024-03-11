@@ -294,11 +294,11 @@ class Labfolder:
 INSERT INTO experiments_links (item_id, link_id)
 SELECT
   experiments.id,
-  (SELECT items.id FROM items WHERE title = '{category}' LIMIT 1)
+  (SELECT items.id FROM items WHERE title = "{category}" LIMIT 1)
 FROM experiments
 LEFT JOIN tags2entity ON tags2entity.item_id = experiments.id AND tags2entity.item_type = 'experiments'
 LEFT JOIN tags ON tags2entity.tag_id = tags.id
-WHERE tags.tag = '{category}';""")
+WHERE tags.tag = "{category}";""")
         return '\n'.join(lines)
 
 
