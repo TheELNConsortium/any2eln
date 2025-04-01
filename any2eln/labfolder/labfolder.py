@@ -73,7 +73,7 @@ class Labfolder:
         return entries
 
     def __get_entries_chunk(self, offset: int, limit=100):
-        url = 'https:// '+ self.server +'/api/v2/entries'
+        url = 'https://'+ self.server +'/api/v2/entries'
         headers = {'Authorization': f'Bearer {self.token}'}
         params = {'expand': 'author,project,last_editor', 'limit': limit, 'offset': offset}
         try:
