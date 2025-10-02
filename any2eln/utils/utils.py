@@ -11,6 +11,7 @@ def env_or_ask(envname: str, prompt: str) -> str:
         return res
     return input(prompt)
 
+
 def debug(line: str) -> None:
     """Only print something if DEV=1 in env"""
     if os.getenv('DEV') == '1':
