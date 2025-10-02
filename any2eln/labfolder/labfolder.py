@@ -25,7 +25,9 @@ from any2eln.utils.rocrate import get_crate_metadata
 
 
 class Labfolder:
-    def __init__(self, username: str, password: str, out_dir='.'):
+    def __init__(self, server: str, username: str, password: str, out_dir='.'):
+        self.server = server
+        # TODO: check for empty server
         self.username = username
         self.password = password
         self.token = self.__get_token()
@@ -42,7 +44,7 @@ class Labfolder:
             return os.getenv('LABFOLDER_TOKEN')
 
         # token is not present in env, so get it from auth/login api
-        url = "https://labfolder.labforward.app/api/v2/auth/login"
+        url = "https://" + self.server + "/api/v2/auth/login"
         headers = {'Content-Type': 'application/json'}
         data = {
             'user': self.username,
@@ -71,7 +73,7 @@ class Labfolder:
         return entries
 
     def __get_entries_chunk(self, offset: int, limit=100):
-        url = 'https://labfolder.labforward.app/api/v2/entries'
+        url = 'https://' + self.server + '/api/v2/entries'
         headers = {'Authorization': f'Bearer {self.token}'}
         params = {'expand': 'author,project,last_editor', 'limit': limit, 'offset': offset}
         try:
@@ -371,7 +373,7 @@ itemsApi.patch_item(itemId, body={'title': """
 
     def __get_element(self, element: dict[str, Any], get_data=False):
         # the replace() is present for WELL_PLATE -> well-plate
-        url = f"https://labfolder.labforward.app/api/v2/elements/{element['type'].lower().replace('_', '-')}/{element['id']}"
+        url = f"https://{self.server}/api/v2/elements/{element['type'].lower().replace('_', '-')}/{element['id']}"
         # for images we want to download the image
         if element['type'] == 'IMAGE' and get_data == True:
             url += '/original-data'
