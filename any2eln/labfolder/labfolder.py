@@ -218,7 +218,7 @@ class Labfolder:
                                     csv_id = self.__get_unique_enough_id()
                                     node = self.__get_node_from_csv(csv_id, csv, entry_folder)
                                     with entry_folder.joinpath(csv_id).open('w') as file:
-                                        file.write(csv[1])
+                                        file.write(csv[1], 'w', 'utf-8')
                                     node['sha256'] = hashlib.sha256(csv[1].encode()).hexdigest()
                                     crate_metadata['@graph'].append(node)
                                     files.append(node['@id'])
