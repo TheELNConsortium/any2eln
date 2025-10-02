@@ -13,18 +13,18 @@ This `.eln` archive can then easily be re-imported in another ELN.
 
 # Installation
 
+Requires [uv from Astral](https://github.com/astral-sh/uv).
+
 ~~~
 git clone https://github.com/TheELNConsortium/any2eln
 cd any2eln
-python -m venv venv
-source venv/bin/activate
-poetry install
+uv sync
 ~~~
 
 # Usage
 
 ~~~
-python any2eln --help
+uv run -m any2eln --help
 ~~~
 
 # Labfolder module
@@ -42,12 +42,14 @@ This project is not affiliated with Labfolder software or Labforward GmbH. It si
 ## Usage
 
 ~~~
-python any2eln --src labfolder
+uv run -m any2eln --src labfolder
 ~~~
 
 The exported data will be saved in the current directory in a folder named `export-Y-m-d-H-M-s`.
 
 For a more verbose output, add ``DEV=1`` to your execution environment.
+
+You can configure a different target server with the ``LABFOLDER_SERVER`` env var (default value is "labfolder.labforward.app").
 
 ## Caveats
 

@@ -375,9 +375,9 @@ itemsApi.patch_item(itemId, body={'title': """
         # the replace() is present for WELL_PLATE -> well-plate
         url = f"https://{self.server}/api/v2/elements/{element['type'].lower().replace('_', '-')}/{element['id']}"
         # for images we want to download the image
-        if element['type'] == 'IMAGE' and get_data == True:
+        if element['type'] == 'IMAGE' and get_data:
             url += '/original-data'
-        if element['type'] == 'FILE' and get_data == True:
+        if element['type'] == 'FILE' and get_data:
             url += '/download'
         debug(f'GET {url}')
         debug(f'curl -v -H "Authorization: Bearer $LABFOLDER_TOKEN" {url}')

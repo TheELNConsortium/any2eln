@@ -7,16 +7,14 @@
 ~~~bash
 git clone https://gitub.com/TheELNConsortium/any2eln
 cd any2eln
-python -m venv venv
-source venv/bin/activate
-poetry install
+uv sync
 ~~~
 
 ### Usage
 
 ~~~bash
 source local.env
-python any2eln
+uv run -m any2eln
 ~~~
 
 ### Api doc

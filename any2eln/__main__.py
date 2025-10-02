@@ -2,6 +2,7 @@
 # © 2024 Nicolas CARPi @ Deltablot
 # License MIT
 import argparse
+import os
 
 from any2eln.labfolder.labfolder import Labfolder
 from any2eln.utils.utils import env_or_ask
@@ -15,7 +16,7 @@ def main():
     args = parser.parse_args()
 
     if args.src == 'labfolder':
-        server = env_or_ask('LABFOLDER_SERVER', 'Your Labfolder server (e.g. labfolder.labforward.app): ')
+        server = os.getenv('LABFOLDER_SERVER', 'labfolder.labforward.app')
         username = env_or_ask('LABFOLDER_USERNAME', 'Your Labfolder username or email: ')
         password = env_or_ask('LABFOLDER_PASSWORD', 'Your Labfolder password: ')
         lf = Labfolder(server, username, password, out_dir=args.out_dir)
