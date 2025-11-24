@@ -134,7 +134,7 @@ class Labfolder:
         SelfNode = TypedDict('SelfNode', {'@id': str, '@type': str, 'hasPart': list[dict[str, str]]})
 
         now = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        main_dir = Path(self.out_dir).joinpath(f'export-{now}')
+        main_dir = Path(self.out_dir).joinpath(f'export-{now}').resolve()
         main_dir.mkdir()
 
         with tqdm(total=len(entries_by_author)) as superpbar:
@@ -270,15 +270,14 @@ class Labfolder:
                     json.dump(crate_metadata, json_file, indent=2)
 
                 # create a container directory because shutil will gobble up the folder
-                # don't use joinpath here because the endslash of the author_dir is kept
-                container = Path(f'{author_dir}-container')
+                container = main_dir.joinpath(f'{author_dir.name}-container')
                 container.mkdir()
                 author_dir.rename(container.joinpath(author_dir.name))
-                eln_name = 'tmp.eln'
-                shutil.make_archive(eln_name, 'zip', container)
+                eln_name = main_dir.joinpath(f'{author_dir.name}.eln')
+                eln_zip = shutil.make_archive(eln_name, 'zip', container)
                 # shutil will add a .zip extension but we want a .eln
-                Path(f'{eln_name}.zip').rename(f'{author_dir}.eln')
-                print(f'Created {author_dir}.eln')
+                Path(eln_zip).rename(eln_name)
+                print(f'Created {eln_name}')
                 superpbar.update(1)
 
         # write the summary.txt file with authors names
