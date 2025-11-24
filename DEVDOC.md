@@ -19,18 +19,18 @@ uv run -m any2eln
 
 ### Api doc
 
-https://labfolder.labforward.app/api/v2/docs/development.html
+https://eln.labfolder.com/api/v2/docs/development.html
 
 ### Using curl
 
 First, login to get a TOKEN
 
 ~~~bash
-curl -X POST -H 'Content-Type: application/json' -d '{"user":"example@example.com", "password": "secr3t"}' https://labfolder.labforward.app/api/v2/auth/login
+curl -X POST -H 'Content-Type: application/json' -d '{"user":"example@example.com", "password": "secr3t"}' https://eln.labfolder.com/api/v2/auth/login
 ~~~
 
 and copy token in some env var like T. Then:
 
 ~~~bash
-curl -H "Authorization: Bearer $T" "https://labfolder.labforward.app/api/v2/templates/26333?expand=entry"
+curl -H "Authorization: Bearer $T" "https://eln.labfolder.com/api/v2/templates/26333?expand=entry"
 ~~~
