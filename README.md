@@ -37,7 +37,7 @@ The `DATA` elements are converted as `.csv` sheet by sheet, when possible, and t
 
 ## Disclaimer
 
-This project is not affiliated with Labfolder software or Labforward GmbH. It simply leverages the [publicly documented API](https://labfolder.labforward.app/api/v2/docs/development.html#notebook-entries) to add a feature: export everything as `.eln`.
+This project is not affiliated with Labfolder software or Labforward GmbH. It simply leverages the [publicly documented API](https://eln.labfolder.com/api/v2/docs/development.html#notebook-entries) to add a feature: export everything as `.eln`.
 
 ## Usage
 
@@ -49,7 +49,7 @@ The exported data will be saved in the current directory in a folder named `expo
 
 For a more verbose output, add ``DEV=1`` to your execution environment.
 
-You can configure a different target server with the ``LABFOLDER_SERVER`` env var (default value is "labfolder.labforward.app").
+You can configure a different target server with the ``LABFOLDER_SERVER`` env var (default value is "eln.labfolder.com").
 
 ## Caveats
 

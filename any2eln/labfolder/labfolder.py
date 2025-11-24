@@ -38,7 +38,7 @@ class Labfolder:
         self.categories = []
 
     def __get_token(self):
-        """Generate a token. See https://labfolder.labforward.app/api/v2/docs/development.html#access-endpoints"""
+        """Generate a token. See https://eln.labfolder.com/api/v2/docs/development.html#access-endpoints"""
         # allow skipping the request for the token if it's set in env
         if os.getenv('LABFOLDER_TOKEN') is not None:
             return os.getenv('LABFOLDER_TOKEN')
@@ -158,7 +158,7 @@ class Labfolder:
 
                         for element in entry['elements']:
                             debug(f"Processing {element.get('type')} with ID: {element['id']}")
-                            # see https://labfolder.labforward.app/api/v2/docs/development.html#entry-elements-file-elements-get
+                            # see https://eln.labfolder.com/api/v2/docs/development.html#entry-elements-file-elements-get
                             if element['type'] == 'FILE':
                                 # get the json first so we can grab the name
                                 res = self.__get_element(element)
