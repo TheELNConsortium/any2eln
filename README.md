@@ -33,7 +33,7 @@ uv run -m any2eln --help
 
 This module allows you to extract all your data from a Labfolder.com account. It goes through all the entries and saves them per author as `.eln` archives. Using this module requires an account on Labfolder.com website.
 
-The `DATA` elements are converted as `.csv` sheet by sheet, when possible, and the full `.json` metadata is also saved alongside.
+The `DATA` elements are converted as `.csv` sheet by sheet, when possible, and the full `.json` metadata is also saved alongside. Files are saved as attachments.
 
 ## Disclaimer
 
