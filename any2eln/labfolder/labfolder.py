@@ -295,8 +295,7 @@ class Labfolder:
     def __get_links_script(self) -> str:
         lines = []
         for category in self.categories:
-            lines.append(
-                f"""
+            lines.append(f"""
 INSERT INTO experiments_links (item_id, link_id)
 SELECT
   experiments.id,
@@ -304,8 +303,7 @@ SELECT
 FROM experiments
 LEFT JOIN tags2entity ON tags2entity.item_id = experiments.id AND tags2entity.item_type = 'experiments'
 LEFT JOIN tags ON tags2entity.tag_id = tags.id
-WHERE tags.tag = "{category}";"""
-            )
+WHERE tags.tag = "{category}";""")
         return '\n'.join(lines)
 
     def __get_project_script(self) -> str:
