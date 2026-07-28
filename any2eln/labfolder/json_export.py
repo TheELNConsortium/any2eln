@@ -760,8 +760,20 @@ class LabfolderJson:
                     continue
                 if resolved.is_file() and self._is_allowed_asset_path(resolved):
                     project_matches.add(resolved)
-        if len(project_matches) == 1:
-            return project_matches.pop()
+        if project_matches:
+            matches = sorted(project_matches)
+            if len(matches) > 1:
+                selected = matches[0]
+                displayed_matches = ', '.join(
+                    str(path.relative_to(self.projects_dir)) for path in matches[:3]
+                )
+                self._warn(
+                    f'Ambiguous Labfolder asset reference {str(reference_path)!r}; '
+                    f'matched {displayed_matches}. Using '
+                    f'{selected.relative_to(self.projects_dir)}.'
+                )
+                return selected
+            return matches[0]
 
         candidates: list[Path] = []
         if reference_path.is_absolute():
@@ -890,12 +902,13 @@ class LabfolderJson:
         best_score = max(score for score, _ in scored)
         best = sorted(asset for score, asset in scored if score == best_score)
         if len(best) > 1:
+            selected = best[0]
             matches = ', '.join(str(path.relative_to(self.projects_dir)) for path in best[:3])
             self._warn(
                 f'Ambiguous Labfolder asset reference {str(reference_path)!r}; '
-                f'matched {matches}. The file was skipped.'
+                f'matched {matches}. Using {selected.relative_to(self.projects_dir)}.'
             )
-            return None
+            return selected
         return best[0]
 
     def _asset_identity_tokens(self, entry: JsonObject, element: JsonObject) -> dict[str, int]:
