@@ -33,6 +33,7 @@ LABFOLDER_DATE_FORMATS = (
 )
 
 ASSET_PATH_KEYS = {
+    'file',
     'path',
     'filepath',
     'localpath',
@@ -133,29 +134,27 @@ class LabfolderJson:
             entry_count = 0
             asset_count = 0
             used_dataset_ids: set[str] = set()
-            for project_index, project in enumerate(projects):
-                if not isinstance(project, dict):
-                    self._warn(f'Skipping projects[{project_index}]: expected an object.')
-                    continue
-
+            for project, category_name, project_tag, project_location in self._walk_projects(projects):
                 entries = project.get('entries', [])
                 if not isinstance(entries, list):
-                    self._warn(f"Skipping project {project.get('id', project_index)}: entries is not an array.")
-                    continue
-                if not entries:
-                    continue
+                    self._warn(
+                        f"Skipping entries in {project_location} ({project.get('id', '?')}): "
+                        'entries is not an array.'
+                    )
+                    entries = []
 
-                project_name = self._string(project.get('name')).strip() or 'Uncategorized'
-                category_id = self._category_id(project_name)
+                category_id = self._category_id(category_name)
                 category_nodes.setdefault(
                     category_id,
                     {
                         '@id': category_id,
                         '@type': 'Thing',
-                        'name': project_name,
+                        'name': category_name,
                         'color': self.category_color,
                     },
                 )
+                if not entries:
+                    continue
 
                 project_directories = self._project_asset_directories(project, projects_by_id)
                 project_files = self._files_for_project(project_directories)
@@ -164,8 +163,8 @@ class LabfolderJson:
                 for entry_index, entry in enumerate(entries):
                     if not isinstance(entry, dict):
                         self._warn(
-                            f"Skipping entry {entry_index} in project {project.get('id', project_index)}: "
-                            'expected an object.'
+                            f"Skipping entry {entry_index} in {project_location} "
+                            f"({project.get('id', '?')}): expected an object."
                         )
                         continue
 
@@ -219,6 +218,7 @@ class LabfolderJson:
                         entry=entry,
                         category_id=category_id,
                         author_id=author_id,
+                        project_tag=project_tag,
                         body_parts=body_parts,
                         file_ids=file_ids,
                     )
@@ -304,13 +304,48 @@ class LabfolderJson:
 
     def _projects_by_id(self, projects: list[Any]) -> dict[str, JsonObject]:
         result: dict[str, JsonObject] = {}
-        for project in projects:
-            if not isinstance(project, dict):
-                continue
-            project_id = self._string(project.get('id')).strip()
-            if project_id:
-                result.setdefault(project_id, project)
+
+        def walk(nodes: list[Any]) -> None:
+            for project in nodes:
+                if not isinstance(project, dict):
+                    continue
+                project_id = self._string(project.get('id')).strip()
+                if project_id:
+                    result.setdefault(project_id, project)
+                children = project.get('children')
+                if isinstance(children, list):
+                    walk(children)
+
+        walk(projects)
         return result
+
+    def _walk_projects(
+        self,
+        projects: list[Any],
+        category_name: str | None = None,
+        location: str = 'projects',
+    ) -> Iterable[tuple[JsonObject, str, str | None, str]]:
+        """Yield every project in a nested export with its inherited category."""
+        for project_index, project in enumerate(projects):
+            project_location = f'{location}[{project_index}]'
+            if not isinstance(project, dict):
+                self._warn(f'Skipping {project_location}: expected an object.')
+                continue
+
+            project_name = self._string(project.get('name')).strip()
+            current_category = category_name or project_name or 'Uncategorized'
+            # A top-level project defines the Experiment Category. Descendants keep
+            # that category and contribute their own project name as a tag.
+            project_tag = project_name if category_name is not None and project_name else None
+            yield project, current_category, project_tag, project_location
+
+            children = project.get('children')
+            if children is None:
+                continue
+            if not isinstance(children, list):
+                self._warn(f'Ignoring invalid children value in {project_location}: expected an array.')
+                continue
+            yield from self._walk_projects(children, current_category, f'{project_location}.children')
 
     def _project_asset_directories(
         self,
@@ -466,6 +501,7 @@ class LabfolderJson:
         entry: JsonObject,
         category_id: str,
         author_id: str | None,
+        project_tag: str | None,
         body_parts: list[str],
         file_ids: list[str],
     ) -> JsonObject:
@@ -496,6 +532,8 @@ class LabfolderJson:
             node['dateModified'] = modified
 
         tags = self._normalise_tags(entry.get('tags'))
+        if project_tag and project_tag.casefold() not in {tag.casefold() for tag in tags}:
+            tags.append(project_tag)
         if tags:
             # eLabFTW accepts either a comma-separated string or an array here.
             node['keywords'] = tags
@@ -540,7 +578,7 @@ class LabfolderJson:
                 found_asset = True
                 if source in copied_assets:
                     continue
-                display_name = self._asset_display_name(element, source)
+                display_name = self._asset_display_name(element, source, element_type)
                 destination = self._unique_destination(entry_folder, display_name, element_position)
                 shutil.copy2(source, destination)
                 node = self._file_node(
@@ -947,19 +985,49 @@ class LabfolderJson:
         }
         return any(resolved == root or resolved.is_relative_to(root) for root in roots)
 
-    def _asset_display_name(self, element: JsonObject, source: Path) -> str:
+    def _asset_display_name(self, element: JsonObject, source: Path, element_type: str) -> str:
         candidates = self._asset_name_candidates(element)
+        display_name = ''
         for candidate in candidates:
             raw_name = unquote(urlparse(candidate).path or candidate).replace('\\', '/')
             name = Path(raw_name).name
             if name and Path(name).suffix:
-                return name
-        for candidate in candidates:
-            raw_name = unquote(urlparse(candidate).path or candidate).replace('\\', '/')
-            name = Path(raw_name).name
-            if name:
-                return name
-        return source.name
+                display_name = name
+                break
+        if not display_name:
+            for candidate in candidates:
+                raw_name = unquote(urlparse(candidate).path or candidate).replace('\\', '/')
+                name = Path(raw_name).name
+                if name:
+                    display_name = name
+                    break
+        if not display_name:
+            display_name = source.name
+
+        if element_type == 'image' and not Path(display_name).suffix:
+            extension = self._detect_image_extension(source)
+            if extension:
+                display_name += extension
+        return display_name
+
+    @staticmethod
+    def _detect_image_extension(source: Path) -> str | None:
+        """Detect image formats supported by eLabFTW thumbnails from magic bytes."""
+        try:
+            with source.open('rb') as image_file:
+                signature = image_file.read(16)
+        except OSError:
+            return None
+
+        if signature.startswith(b'\x89PNG\r\n\x1a\n'):
+            return '.png'
+        if signature.startswith(b'\xff\xd8\xff'):
+            return '.jpg'
+        if signature.startswith((b'GIF87a', b'GIF89a')):
+            return '.gif'
+        if signature.startswith(b'BM'):
+            return '.bmp'
+        return None
 
     def _add_project_author_node(
         self,
