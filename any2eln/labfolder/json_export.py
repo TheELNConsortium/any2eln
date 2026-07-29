@@ -299,16 +299,9 @@ class LabfolderJson:
 
         self._asset_files = tuple(sorted(files))
         self._project_directories = tuple(sorted(project_directories))
-        self._files_by_casefold_name = {
-            name: tuple(paths) for name, paths in by_casefold_name.items()
-        }
-        self._files_by_normalised_name = {
-            name: tuple(paths) for name, paths in by_normalised_name.items()
-        }
-        self._files_by_export_path = {
-            path_key: tuple(sorted(set(paths)))
-            for path_key, paths in by_export_path.items()
-        }
+        self._files_by_casefold_name = {name: tuple(paths) for name, paths in by_casefold_name.items()}
+        self._files_by_normalised_name = {name: tuple(paths) for name, paths in by_normalised_name.items()}
+        self._files_by_export_path = {path_key: tuple(sorted(set(paths))) for path_key, paths in by_export_path.items()}
 
     def _projects_by_id(self, projects: list[Any]) -> dict[str, JsonObject]:
         result: dict[str, JsonObject] = {}
@@ -388,12 +381,11 @@ class LabfolderJson:
             score = 0
 
             if chain_normalised and len(normalised_parts) >= len(chain_normalised):
-                suffix = normalised_parts[-len(chain_normalised):]
+                suffix = normalised_parts[-len(chain_normalised) :]
                 if suffix == chain_normalised:
                     score = 1000 + len(chain_normalised) * 10
                 elif all(
-                    self._path_component_matches(actual, expected)
-                    for actual, expected in zip(suffix, chain_normalised)
+                    self._path_component_matches(actual, expected) for actual, expected in zip(suffix, chain_normalised)
                 ):
                     score = 850 + len(chain_normalised) * 10
 
@@ -471,11 +463,13 @@ class LabfolderJson:
         if reference_path.is_absolute():
             candidates.append(reference_path)
         else:
-            candidates.extend((
-                self.projects_dir / reference_path,
-                self.assets_dir / reference_path,
-                self.input_file.parent / reference_path,
-            ))
+            candidates.extend(
+                (
+                    self.projects_dir / reference_path,
+                    self.assets_dir / reference_path,
+                    self.input_file.parent / reference_path,
+                )
+            )
         for candidate in candidates:
             try:
                 resolved = candidate.expanduser().resolve()
@@ -594,10 +588,11 @@ class LabfolderJson:
                 )
 
             if source not in copied_assets:
-                # `filename` is the real name shown by eLabFTW. Only add an image
-                # extension when Labfolder omitted it and the file signature is known.
+                # `filename` is the real name shown by eLabFTW. When Labfolder
+                # omitted its extension, add one only if the file content identifies
+                # a supported image format.
                 display_name = filename
-                if element_type == 'image' and not Path(display_name).suffix:
+                if not Path(display_name).suffix:
                     extension = self._detect_image_extension(source)
                     if extension:
                         display_name += extension
@@ -860,10 +855,7 @@ class LabfolderJson:
             return None
         reference_path = Path(raw_path)
         element_type = self._string(element.get('type')).strip().lower().replace('-', '_')
-        if (
-            element_type == 'text'
-            and reference_path.suffix.casefold() in {'.html', '.xhtml', '.css', '.js'}
-        ):
+        if element_type == 'text' and reference_path.suffix.casefold() in {'.html', '.xhtml', '.css', '.js'}:
             return None
 
         # A path in an XHTML project index is normally relative to that project's
@@ -882,9 +874,7 @@ class LabfolderJson:
             matches = sorted(project_matches)
             if len(matches) > 1:
                 selected = matches[0]
-                displayed_matches = ', '.join(
-                    str(path.relative_to(self.projects_dir)) for path in matches[:3]
-                )
+                displayed_matches = ', '.join(str(path.relative_to(self.projects_dir)) for path in matches[:3])
                 self._warn(
                     f'Ambiguous Labfolder asset reference {str(reference_path)!r}; '
                     f'matched {displayed_matches}. Using '
@@ -898,11 +888,13 @@ class LabfolderJson:
             candidates.append(reference_path)
             candidates.append(self.assets_dir / raw_path.lstrip('/'))
         else:
-            candidates.extend((
-                self.projects_dir / reference_path,
-                self.assets_dir / reference_path,
-                self.input_file.parent / reference_path,
-            ))
+            candidates.extend(
+                (
+                    self.projects_dir / reference_path,
+                    self.assets_dir / reference_path,
+                    self.input_file.parent / reference_path,
+                )
+            )
             if reference_path.parts and reference_path.parts[0].casefold() == 'projects':
                 candidates.append(self.projects_dir.joinpath(*reference_path.parts[1:]))
 
@@ -939,20 +931,14 @@ class LabfolderJson:
         reference_normalised = self._normalise_for_match(reference_name)
         reference_stem = self._normalise_for_match(reference_path.stem)
         reference_parts = [
-            self._normalise_for_match(part)
-            for part in reference_path.parts
-            if part not in {'', '.', '..'}
+            self._normalise_for_match(part) for part in reference_path.parts if part not in {'', '.', '..'}
         ]
         reference_parts = [part for part in reference_parts if part]
         identity_tokens = self._asset_identity_tokens(entry, element)
 
         candidates: set[Path] = set()
         candidates.update(path for path in self._files_by_casefold_name.get(reference_casefold, ()) if path in pool)
-        candidates.update(
-            path
-            for path in self._files_by_normalised_name.get(reference_normalised, ())
-            if path in pool
-        )
+        candidates.update(path for path in self._files_by_normalised_name.get(reference_normalised, ()) if path in pool)
 
         # Handle XHTML exports that prefix the original name with an element ID,
         # and paths that retain only a suffix of the original relative path.
@@ -965,14 +951,11 @@ class LabfolderJson:
                 candidates.add(asset)
                 continue
             try:
-                asset_parts = [
-                    self._normalise_for_match(part)
-                    for part in asset.relative_to(self.projects_dir).parts
-                ]
+                asset_parts = [self._normalise_for_match(part) for part in asset.relative_to(self.projects_dir).parts]
             except ValueError:
                 asset_parts = [self._normalise_for_match(part) for part in asset.parts]
             if reference_parts and len(asset_parts) >= len(reference_parts):
-                if asset_parts[-len(reference_parts):] == reference_parts:
+                if asset_parts[-len(reference_parts) :] == reference_parts:
                     candidates.add(asset)
                     continue
             normalised_asset_path = '/'.join(asset_parts)
@@ -986,15 +969,12 @@ class LabfolderJson:
             asset_normalised = self._normalise_for_match(asset.name)
             asset_stem = self._normalise_for_match(asset.stem)
             try:
-                asset_parts = [
-                    self._normalise_for_match(part)
-                    for part in asset.relative_to(self.projects_dir).parts
-                ]
+                asset_parts = [self._normalise_for_match(part) for part in asset.relative_to(self.projects_dir).parts]
             except ValueError:
                 asset_parts = [self._normalise_for_match(part) for part in asset.parts]
 
             if reference_parts and len(asset_parts) >= len(reference_parts):
-                if asset_parts[-len(reference_parts):] == reference_parts:
+                if asset_parts[-len(reference_parts) :] == reference_parts:
                     score += 1200 + len(reference_parts) * 10
             if asset_casefold == reference_casefold:
                 score += 800
@@ -1006,11 +986,7 @@ class LabfolderJson:
                 score += 400
 
             normalised_asset_path = '/'.join(asset_parts)
-            score += sum(
-                weight
-                for token, weight in identity_tokens.items()
-                if token in normalised_asset_path
-            )
+            score += sum(weight for token, weight in identity_tokens.items() if token in normalised_asset_path)
             if score:
                 scored.append((score, asset))
 
@@ -1084,7 +1060,7 @@ class LabfolderJson:
         if not display_name:
             display_name = source.name
 
-        if element_type == 'image' and not Path(display_name).suffix:
+        if not Path(display_name).suffix:
             extension = self._detect_image_extension(source)
             if extension:
                 display_name += extension
@@ -1092,21 +1068,39 @@ class LabfolderJson:
 
     @staticmethod
     def _detect_image_extension(source: Path) -> str | None:
-        """Detect image formats supported by eLabFTW thumbnails from magic bytes."""
+        """Return an image extension based only on the file contents."""
         try:
             with source.open('rb') as image_file:
-                signature = image_file.read(16)
+                header = image_file.read(512)
         except OSError:
             return None
 
-        if signature.startswith(b'\x89PNG\r\n\x1a\n'):
+        if header.startswith(b'\x89PNG\r\n\x1a\n'):
             return '.png'
-        if signature.startswith(b'\xff\xd8\xff'):
+        if header.startswith(b'\xff\xd8\xff'):
             return '.jpg'
-        if signature.startswith((b'GIF87a', b'GIF89a')):
+        if header.startswith((b'GIF87a', b'GIF89a')):
             return '.gif'
-        if signature.startswith(b'BM'):
+        if header.startswith(b'BM'):
             return '.bmp'
+        if len(header) >= 12 and header.startswith(b'RIFF') and header[8:12] == b'WEBP':
+            return '.webp'
+        if header.startswith((b'II*\x00', b'MM\x00*')):
+            return '.tif'
+        if header.startswith(b'\x00\x00\x01\x00'):
+            return '.ico'
+
+        # SVG is textual rather than identified by fixed magic bytes. Only inspect
+        # the beginning of the file and accept an actual root <svg> element, with
+        # or without an XML declaration.
+        text_header = header.lstrip()
+        if text_header.startswith(b'\xef\xbb\xbf'):
+            text_header = text_header[3:].lstrip()
+        lower_header = text_header.lower()
+        if lower_header.startswith(b'<svg'):
+            return '.svg'
+        if lower_header.startswith(b'<?xml') and b'<svg' in lower_header:
+            return '.svg'
         return None
 
     def _add_project_author_node(
