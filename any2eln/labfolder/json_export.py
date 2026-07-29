@@ -559,90 +559,60 @@ class LabfolderJson:
     ) -> tuple[str, list[JsonObject]]:
         element_type = self._string(element.get('type')).strip().lower().replace('-', '_')
         content = element.get('content')
-        html = ''
+        # Text blocks are body content only. Do not inspect links, file:// URLs, or
+        # any other strings inside the text in an attempt to discover attachments.
+        html = content if element_type == 'text' and isinstance(content, str) else ''
         nodes: list[JsonObject] = []
 
-        if isinstance(content, str):
-            if element_type == 'text' or self._looks_like_html(content):
-                html = content if self._looks_like_html(content) else f'<p>{escape(content)}</p>'
-
         explicit_reference = self._explicit_asset_reference(element)
-        references = tuple(
-            reference
-            for reference in self._asset_references(element, element_type)
-            if reference != explicit_reference
-        )
-        found_asset = False
+        has_attachment = element_type in {'file', 'image'} or explicit_reference is not None
+        if element_type != 'text' and has_attachment:
+            entry_id = self._string(entry.get('id')).strip() or 'unknown'
+            element_id = self._string(element.get('id')).strip() or str(element.get('index', element_position))
 
-        # The top-level `file` property is the authoritative path from the export.
-        # Resolve it before looking at `filename` or any element IDs: those fallback
-        # values can be ambiguous even when the exact exported path is valid.
-        if explicit_reference is not None:
+            if explicit_reference is None:
+                raise ValueError(
+                    f'Missing file property for {element_type or "unknown"} element '
+                    f'{element_id} from entry {entry_id}.'
+                )
+
+            filename = element.get('filename')
+            if not isinstance(filename, str) or not filename:
+                raise ValueError(
+                    f'Missing filename property for {element_type or "unknown"} element '
+                    f'{element_id} from entry {entry_id}.'
+                )
+
+            # The export guarantees that `file` is a literal path relative to the
+            # input JSON file. Do not parse, decode, normalise, or score it.
             source = self._resolve_explicit_asset(explicit_reference)
             if source is None:
-                entry_id = self._string(entry.get('id')).strip() or 'unknown'
-                element_id = self._string(element.get('id')).strip() or str(element.get('index', element_position))
-                self._warn(
-                    f'Could not find exported file {explicit_reference!r} for {element_type or "unknown"} '
-                    f'element {element_id} from entry {entry_id}; trying fallback references.'
+                raise FileNotFoundError(
+                    f'Could not find exported file {explicit_reference!r} relative to '
+                    f'{self.input_file.parent} for {element_type or "unknown"} element '
+                    f'{element_id} from entry {entry_id}.'
                 )
-            else:
-                found_asset = True
-                if source not in copied_assets:
-                    display_name = self._asset_display_name(element, source, element_type)
-                    destination = self._unique_destination(entry_folder, display_name, element_position)
-                    shutil.copy2(source, destination)
-                    node = self._file_node(
-                        destination,
-                        entry_folder,
-                        display_name=display_name,
-                        alternate_name=explicit_reference,
-                        archived=False,
-                    )
-                    nodes.append(node)
-                    copied_assets[source] = node['@id']
 
-        # Fall back to the older matching logic only when no usable `file` path was
-        # supplied. This also supports old exports that only contain a filename.
-        if not found_asset and (
-            element_type in {'file', 'image'}
-            or explicit_reference is not None
-            or isinstance(content, str)
-        ):
-            for reference in references:
-                source = self._resolve_asset(
-                    reference=reference,
-                    project_directories=project_directories,
-                    project_files=project_files,
-                    entry=entry,
-                    element=element,
-                )
-                if source is None:
-                    continue
-                found_asset = True
-                if source in copied_assets:
-                    continue
-                display_name = self._asset_display_name(element, source, element_type)
+            if source not in copied_assets:
+                # `filename` is the real name shown by eLabFTW. Only add an image
+                # extension when Labfolder omitted it and the file signature is known.
+                display_name = filename
+                if element_type == 'image' and not Path(display_name).suffix:
+                    extension = self._detect_image_extension(source)
+                    if extension:
+                        display_name += extension
+
                 destination = self._unique_destination(entry_folder, display_name, element_position)
                 shutil.copy2(source, destination)
                 node = self._file_node(
                     destination,
                     entry_folder,
                     display_name=display_name,
-                    alternate_name=reference,
+                    alternate_name=explicit_reference,
                     archived=False,
                 )
                 nodes.append(node)
                 copied_assets[source] = node['@id']
-
-        if element_type in {'file', 'image'} and not found_asset and explicit_reference is None:
-            entry_id = self._string(entry.get('id')).strip() or 'unknown'
-            element_id = self._string(element.get('id')).strip() or str(element.get('index', element_position))
-            reference_summary = ', '.join(repr(reference) for reference in references[:3]) or 'no filename or path'
-            self._warn(
-                f'Could not match {element_type} element {element_id} from entry {entry_id} '
-                f'to a file below {self.projects_dir} ({reference_summary}).'
-            )
 
         # API-like TABLE/WELL_PLATE JSON can still be converted sheet-by-sheet to CSV.
         if element_type in {'table', 'well_plate', 'wellplate'}:
@@ -683,7 +653,7 @@ class LabfolderJson:
         node: JsonObject = {
             '@id': f'./{entry_folder.name}/{file_path.name}',
             '@type': 'File',
-            'name': self._safe_component(Path(display_name).name) if display_name else file_path.name,
+            'name': display_name if display_name is not None else file_path.name,
             'encodingFormat': mimetypes.guess_type(file_path.name)[0] or 'application/octet-stream',
             'contentSize': len(data),
             'sha256': hashlib.sha256(data).hexdigest(),
@@ -809,8 +779,8 @@ class LabfolderJson:
     def _explicit_asset_reference(element: JsonObject) -> str | None:
         """Return the authoritative export path attached to an element."""
         reference = element.get('file')
-        if isinstance(reference, str) and reference.strip():
-            return reference.strip()
+        if isinstance(reference, str) and reference:
+            return reference
         return None
 
     @staticmethod
@@ -867,64 +837,9 @@ class LabfolderJson:
         return keys
 
     def _resolve_explicit_asset(self, reference: str) -> Path | None:
-        """Resolve an element's `file` path by full path, never by filename score."""
-        raw_path = self._decode_local_asset_reference(reference)
-        if raw_path is None:
-            return None
-        reference_path = Path(raw_path)
-
-        candidates: list[Path] = []
-        if reference_path.is_absolute():
-            candidates.append(reference_path)
-            export_relative = Path(raw_path.lstrip('/'))
-            candidates.extend((
-                self.input_file.parent / export_relative,
-                self.assets_dir / export_relative,
-            ))
-        else:
-            candidates.extend((
-                self.input_file.parent / reference_path,
-                self.assets_dir / reference_path,
-            ))
-
-        if reference_path.parts and reference_path.parts[0].casefold() == 'projects':
-            candidates.append(self.projects_dir.joinpath(*reference_path.parts[1:]))
-        elif not reference_path.is_absolute():
-            candidates.append(self.projects_dir / reference_path)
-
-        for candidate in dict.fromkeys(candidates):
-            try:
-                resolved = candidate.expanduser().resolve()
-            except OSError:
-                continue
-            if resolved.is_file() and self._is_allowed_asset_path(resolved):
-                return resolved
-
-        # Filesystems are case-sensitive and exported names can differ in Unicode
-        # normalisation. Match the complete relative path through the prebuilt index;
-        # this is deterministic and does not use the old filename scoring heuristic.
-        path_key = self._asset_path_key(raw_path)
-        if path_key is None:
-            return None
-        path_keys = [path_key]
-        if path_key.startswith('projects/'):
-            path_keys.append(path_key.removeprefix('projects/'))
-        else:
-            path_keys.append(f'projects/{path_key}')
-
-        matches: set[Path] = set()
-        for key in path_keys:
-            matches.update(self._files_by_export_path.get(key, ()))
-        if not matches:
-            return None
-        ordered = sorted(matches)
-        if len(ordered) > 1:
-            displayed = ', '.join(str(path.relative_to(self.projects_dir)) for path in ordered[:3])
-            self._warn(
-                f'Export path {reference!r} matched multiple files after path normalisation: '
-                f'{displayed}. Using {ordered[0].relative_to(self.projects_dir)}.'
-            )
-        return ordered[0]
+        """Read the literal `file` value relative to the input JSON file."""
+        source = self.input_file.parent / reference
+        return source if source.is_file() else None
 
     def _resolve_asset(
         self,
