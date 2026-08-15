@@ -89,8 +89,11 @@ class LabfolderJson:
         assets_dir: str | Path | None = None,
         category_color: str = '#29aeb9',
         timezone_name: str | None = None,
+        *,
+        entry_authors_file: str | Path,
     ) -> None:
         self.input_file = Path(input_file).expanduser().resolve()
+        self.entry_authors_file = Path(entry_authors_file).expanduser().resolve()
         self.out_dir = Path(out_dir).expanduser().resolve()
         self.assets_dir = Path(assets_dir).expanduser().resolve() if assets_dir else self.input_file.parent
         self.category_color = category_color
@@ -107,6 +110,7 @@ class LabfolderJson:
         projects = data.get('projects')
         if not isinstance(projects, list):
             raise ValueError('Expected the top-level JSON object to contain a projects array.')
+        entry_authors_by_id = self._load_entry_authors()
 
         self._prepare_asset_index()
         projects_by_id = self._projects_by_id(projects)
@@ -159,7 +163,8 @@ class LabfolderJson:
 
                 project_directories = self._project_asset_directories(project, projects_by_id)
                 project_files = self._files_for_project(project_directories)
-                author_id = self._add_project_author_node(project, author_nodes)
+                project_author_id: str | None = None
+                project_author_loaded = False
 
                 for entry_index, entry in enumerate(entries):
                     if not isinstance(entry, dict):
@@ -168,6 +173,18 @@ class LabfolderJson:
                             f"({project.get('id', '?')}): expected an object."
                         )
                         continue
+
+                    author_id = self._add_entry_author_node(
+                        project=project,
+                        entry=entry,
+                        entry_authors_by_id=entry_authors_by_id,
+                        author_nodes=author_nodes,
+                    )
+                    if author_id is None:
+                        if not project_author_loaded:
+                            project_author_id = self._add_project_author_node(project, author_nodes)
+                            project_author_loaded = True
+                        author_id = project_author_id
 
                     dataset_id, entry_folder_name = self._unique_dataset_id(project, entry, used_dataset_ids)
                     entry_folder = crate_root / entry_folder_name
@@ -496,6 +513,48 @@ class LabfolderJson:
         if not isinstance(data, dict):
             raise ValueError('Expected a top-level JSON object.')
         return data
+
+    def _load_entry_authors(self) -> dict[str, JsonObject]:
+        """Load the entry-to-author correspondence file, indexed by Labfolder entry ID."""
+        with self.entry_authors_file.open(encoding='utf-8') as source:
+            data = json.load(source)
+
+        records: list[Any]
+        if isinstance(data, list):
+            records = data
+        elif isinstance(data, dict) and 'entry_id' in data:
+            # Also accept a single record, which is useful for small exports and tests.
+            records = [data]
+        elif isinstance(data, dict):
+            wrapped_records = data.get('entry_authors', data.get('entries'))
+            if not isinstance(wrapped_records, list):
+                raise ValueError(
+                    'Expected the entry authors JSON to be an array, a single author record, '
+                    'or an object containing an entry_authors or entries array.'
+                )
+            records = wrapped_records
+        else:
+            raise ValueError(
+                'Expected the entry authors JSON to be an array, a single author record, '
+                'or an object containing an entry_authors or entries array.'
+            )
+
+        result: dict[str, JsonObject] = {}
+        for record_index, record in enumerate(records):
+            if not isinstance(record, dict):
+                self._warn(f'Skipping entry author record {record_index}: expected an object.')
+                continue
+
+            entry_id = self._string(record.get('entry_id')).strip()
+            if not entry_id:
+                self._warn(f'Skipping entry author record {record_index}: missing entry_id.')
+                continue
+
+            existing = result.get(entry_id)
+            if existing is not None and existing != record:
+                raise ValueError(f'Conflicting entry author records found for entry_id {entry_id}.')
+            result[entry_id] = record
+        return result
 
     def _dataset_node(
         self,
@@ -1103,12 +1162,85 @@ class LabfolderJson:
             return '.svg'
         return None
 
+    def _add_entry_author_node(
+        self,
+        project: JsonObject,
+        entry: JsonObject,
+        entry_authors_by_id: dict[str, JsonObject],
+        author_nodes: dict[str, JsonObject],
+    ) -> str | None:
+        """Create the Person node for one entry using its correspondence record."""
+        entry_id = self._string(entry.get('id')).strip()
+        if not entry_id:
+            self._warn('A Labfolder entry has no id; falling back to its project owner for authorship.')
+            return None
+
+        record = entry_authors_by_id.get(entry_id)
+        if record is None:
+            self._warn(
+                f'No entry author correspondence found for Labfolder entry {entry_id}; '
+                'falling back to its project owner.'
+            )
+            return None
+
+        project_id = self._string(project.get('id')).strip()
+        record_project_id = self._string(record.get('project_id')).strip()
+        if project_id and record_project_id and project_id != record_project_id:
+            raise ValueError(
+                f'Entry author correspondence for entry_id {entry_id} belongs to project_id '
+                f'{record_project_id}, but the entry is in project_id {project_id}.'
+            )
+
+        email = self._string(record.get('author_email')).strip()
+        if not email:
+            self._warn(
+                f'Entry author correspondence for Labfolder entry {entry_id} has no author_email; '
+                'falling back to its project owner.'
+            )
+            return None
+
+        author_name = self._string(record.get('author_name')).strip()
+        given_name = self._string(record.get('author_first_name')).strip()
+        family_name = self._string(record.get('author_last_name')).strip()
+
+        name_parts = author_name.split()
+        if author_name and not given_name:
+            given_name = ' '.join(name_parts[:-1]) if len(name_parts) > 1 else author_name
+        if author_name and not family_name and len(name_parts) > 1:
+            family_name = name_parts[-1]
+
+        display_name = author_name or ' '.join(part for part in (given_name, family_name) if part)
+        given_name = given_name or 'Unknown'
+        family_name = family_name or 'Unknown'
+        display_name = display_name or f'{given_name} {family_name}'.strip()
+
+        entry_author_name = self._string(entry.get('author')).strip()
+        if (
+            entry_author_name
+            and display_name
+            and self._normalise_for_match(entry_author_name) != self._normalise_for_match(display_name)
+        ):
+            self._warn(
+                f'Author name mismatch for Labfolder entry {entry_id}: index.json contains '
+                f'{entry_author_name!r}, while the correspondence file contains {display_name!r}. '
+                'Using the correspondence record because entry_id is authoritative.'
+            )
+
+        return self._add_author_node(
+            email=email,
+            given_name=given_name,
+            family_name=family_name,
+            name=display_name,
+            labfolder_user_id=self._string(record.get('author_id')).strip(),
+            author_nodes=author_nodes,
+        )
+
     def _add_project_author_node(
         self,
         project: JsonObject,
         author_nodes: dict[str, JsonObject],
     ) -> str | None:
-        """Create the Person node used by TrustedEln for project ownership."""
+        """Create a fallback Person node from the Labfolder project owner."""
         owner = project.get('owner')
         project_id = self._string(project.get('id')).strip() or 'unknown'
         project_name = self._string(project.get('name')).strip() or 'unnamed'
@@ -1133,8 +1265,29 @@ class LabfolderJson:
         given_name = self._string(owner.get('firstName')).strip() or 'Unknown'
         family_name = self._string(owner.get('lastName')).strip() or 'Unknown'
 
+        return self._add_author_node(
+            email=email,
+            given_name=given_name,
+            family_name=family_name,
+            name=f'{given_name} {family_name}'.strip(),
+            labfolder_user_id=owner_id,
+            author_nodes=author_nodes,
+        )
+
+    @staticmethod
+    def _add_author_node(
+        *,
+        email: str,
+        given_name: str,
+        family_name: str,
+        name: str,
+        labfolder_user_id: str,
+        author_nodes: dict[str, JsonObject],
+    ) -> str:
+        """Add one email-addressed Person node and return its stable RO-Crate ID."""
+
         # TrustedEln resolves users by email. Use the normalised email as the stable
-        # identity so an owner shared by several projects produces one Person node.
+        # identity so an author shared by several entries produces one Person node.
         # The URI shape follows the Person IDs generated by eLabFTW exports.
         digest = hashlib.sha256(email.casefold().encode()).hexdigest()
         author_id = f'person://{digest}?hash_algo=sha256'
@@ -1144,10 +1297,10 @@ class LabfolderJson:
             'givenName': given_name,
             'familyName': family_name,
             'email': email,
-            'name': f'{given_name} {family_name}'.strip(),
+            'name': name,
         }
-        if owner_id:
-            node['identifier'] = f'labfolder-user:{owner_id}'
+        if labfolder_user_id:
+            node['identifier'] = f'labfolder-user:{labfolder_user_id}'
 
         author_nodes.setdefault(author_id, node)
         return author_id
