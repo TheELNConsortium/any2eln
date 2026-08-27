@@ -18,7 +18,10 @@ def main():
     parser.add_argument('--assets_dir', help='base directory used to resolve files referenced by the JSON export')
     parser.add_argument('--timezone', help='IANA timezone of Labfolder timestamps, for example Europe/Paris')
     parser.add_argument('--category_color', default='#29aeb9', help='color assigned to imported categories')
-    parser.add_argument(     '--entry_authors_file',     help='JSON file mapping Labfolder entry IDs to author information', )
+    parser.add_argument(
+        '--entry_authors_file',
+        help='JSON file mapping Labfolder entry IDs to author information',
+    )
     args = parser.parse_args()
 
     if args.src == 'labfolder':
